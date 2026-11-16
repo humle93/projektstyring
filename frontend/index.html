@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="da" class="h-full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projektstyring</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>[x-cloak]{display:none}.tick{font-variant-numeric:tabular-nums}</style>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 antialiased">
+
+<!-- Login / førstegangsopsætning -->
+<section id="auth" class="hidden min-h-full flex items-center justify-center p-6">
+  <form id="authForm" class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+    <h1 class="text-xl font-semibold">Projektstyring</h1>
+    <p id="authHint" class="text-sm text-slate-400">Log ind for at fortsætte.</p>
+    <input id="username" autocomplete="username" required minlength="3" placeholder="Brugernavn"
+      class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    <input id="password" type="password" autocomplete="current-password" required minlength="8" placeholder="Adgangskode (min. 8 tegn)"
+      class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    <p id="authError" class="text-sm text-rose-400 hidden"></p>
+    <button id="authBtn" class="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 py-2 font-medium">Log ind</button>
+  </form>
+</section>
+
+<!-- App -->
+<div id="app" class="hidden min-h-full flex flex-col">
+  <!-- Aktiv timer -->
+  <header class="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-slate-800">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
+      <span class="font-semibold">Projektstyring</span>
+      <div id="timerBar" class="flex-1 flex items-center gap-3 text-sm text-slate-400">Ingen timer kører</div>
+      <button id="logoutBtn" class="text-sm text-slate-400 hover:text-white">Log ud</button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto w-full px-4 py-6 grid gap-6 md:grid-cols-[260px_1fr]">
+    <!-- Projekter -->
+    <aside class="space-y-4">
+      <div class="grid grid-cols-3 md:grid-cols-1 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><div class="text-xs text-slate-400">I dag</div><div id="statToday" class="text-lg font-semibold tick">0:00</div></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><div class="text-xs text-slate-400">Denne uge</div><div id="statWeek" class="text-lg font-semibold tick">0:00</div></div>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><div class="text-xs text-slate-400">Åbne opgaver</div><div id="statOpen" class="text-lg font-semibold">0</div></div>
+      </div>
+      <form id="projectForm" class="flex gap-2">
+        <input id="projectName" required placeholder="Nyt projekt" class="flex-1 min-w-0 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm">
+        <input id="projectColor" type="color" value="#6366f1" class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 p-1">
+        <button class="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 text-sm">+</button>
+      </form>
+      <nav id="projectList" class="space-y-1"></nav>
+    </aside>
+
+    <!-- Valgt projekt -->
+    <section id="projectView" class="space-y-4">
+      <div id="emptyState" class="text-slate-400 text-sm">Opret eller vælg et projekt til venstre.</div>
+      <div id="projectDetail" class="hidden space-y-4">
+        <div class="flex items-center gap-3">
+          <span id="pdColor" class="w-3 h-3 rounded-full"></span>
+          <h2 id="pdName" class="text-xl font-semibold flex-1"></h2>
+          <button id="pdTimer" class="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-sm">▶ Start timer</button>
+          <button id="pdArchive" class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">Arkivér</button>
+        </div>
+        <form id="taskForm" class="flex gap-2">
+          <input id="taskTitle" required placeholder="Ny opgave…" class="flex-1 rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm">
+          <input id="taskDue" type="date" class="rounded-lg bg-slate-800 border border-slate-700 px-2 text-sm">
+          <button class="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 text-sm">Tilføj</button>
+        </form>
+        <div class="grid gap-4 lg:grid-cols-3" id="board"></div>
+        <div>
+          <h3 class="text-sm font-medium text-slate-300 mb-2">Tidslog (7 dage)</h3>
+          <ul id="logList" class="divide-y divide-slate-800 bg-slate-900 border border-slate-800 rounded-xl text-sm"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const API = '';
+const $ = id => document.getElementById(id);
+const state = { token: localStorage.getItem('ps_token'), projects: [], current: null, active: null, skew: 0, setup: false };
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json',
+    ...(state.token ? { Authorization: 'Bearer ' + state.token } : {}), ...(opts.headers || {}) } });
+  if (res.status === 401 && !path.startsWith('/api/auth/')) { logout(false); throw new Error('Session udløbet'); }
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || res.statusText); }
+  return res.status === 204 ? null : res.json();
+}
+
+const fmt = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+  return h + ':' + String(m).padStart(2, '0') + (sec !== undefined ? ':' + String(sec).padStart(2, '0') : ''); };
+const fmtHM = s => { s = Math.floor(s); return Math.floor(s / 3600) + ':' + String(Math.floor(s % 3600 / 60)).padStart(2, '0'); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---------- Auth ----------
+async function showAuth() {
+  $('app').classList.add('hidden'); $('auth').classList.remove('hidden');
+  try { state.setup = (await api('/api/auth/setup')).needs_setup; } catch { state.setup = false; }
+  $('authHint').textContent = state.setup ? 'Første gang: opret din administrator-konto.' : 'Log ind for at fortsætte.';
+  $('authBtn').textContent = state.setup ? 'Opret konto' : 'Log ind';
+}
+$('authForm').onsubmit = async e => {
+  e.preventDefault(); $('authError').classList.add('hidden');
+  try {
+    const r = await api(state.setup ? '/api/auth/register' : '/api/auth/login',
+      { method: 'POST', body: JSON.stringify({ username: $('username').value, password: $('password').value }) });
+    state.token = r.token; localStorage.setItem('ps_token', r.token); $('password').value = ''; start();
+  } catch (err) { $('authError').textContent = err.message; $('authError').classList.remove('hidden'); }
+};
+async function logout(callApi = true) {
+  if (callApi) try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
+  state.token = null; localStorage.removeItem('ps_token'); showAuth();
+}
+$('logoutBtn').onclick = () => logout();
+
+// ---------- Data ----------
+async function loadProjects() {
+  state.projects = await api('/api/projects');
+  $('projectList').innerHTML = state.projects.map(p => `
+    <button data-id="${p.id}" class="w-full text-left flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-800 ${state.current?.id === p.id ? 'bg-slate-800' : ''}">
+      <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${esc(p.color)}"></span>
+      <span class="flex-1 truncate">${esc(p.name)}</span>
+      <span class="text-xs text-slate-500 tick">${p.done_count}/${p.task_count} · ${fmtHM(p.total_seconds)}</span>
+    </button>`).join('') || '<p class="text-sm text-slate-500 px-3">Ingen projekter endnu.</p>';
+  $('projectList').querySelectorAll('button').forEach(b => b.onclick = () => selectProject(+b.dataset.id));
+}
+async function loadStats() {
+  const s = await api('/api/stats/summary');
+  $('statToday').textContent = fmtHM(s.today_seconds); $('statWeek').textContent = fmtHM(s.week_seconds); $('statOpen').textContent = s.open_tasks;
+}
+async function loadActive() {
+  const r = await api('/api/timers/active');
+  state.active = r.active; state.skew = Date.now() - Date.parse(r.server_time); renderTimer();
+}
+async function selectProject(id) {
+  state.current = state.projects.find(p => p.id === id); if (!state.current) return;
+  $('emptyState').classList.add('hidden'); $('projectDetail').classList.remove('hidden');
+  $('pdName').textContent = state.current.name; $('pdColor').style.background = state.current.color;
+  loadProjects(); await Promise.all([loadTasks(), loadLogs()]); renderTimer();
+}
+async function loadTasks() {
+  const tasks = await api(`/api/projects/${state.current.id}/tasks`);
+  const cols = { todo: 'At gøre', doing: 'I gang', done: 'Færdig' };
+  $('board').innerHTML = Object.entries(cols).map(([k, label]) => `
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-3">
+      <div class="text-xs uppercase tracking-wide text-slate-400 mb-2">${label} (${tasks.filter(t => t.status === k).length})</div>
+      <ul class="space-y-2">${tasks.filter(t => t.status === k).map(t => `
+        <li class="group bg-slate-800/60 rounded-lg px-3 py-2 text-sm">
+          <div class="flex items-start gap-2">
+            <span class="flex-1 ${k === 'done' ? 'line-through text-slate-500' : ''}">${esc(t.title)}</span>
+            <button title="Start timer" data-act="timer" data-id="${t.id}" class="text-emerald-400 hover:text-emerald-300">▶</button>
+          </div>
+          <div class="flex items-center gap-2 mt-1 text-xs text-slate-500">
+            ${t.due_date ? `<span>${esc(t.due_date)}</span>` : ''}
+            <span class="flex-1"></span>
+            ${k !== 'todo' ? `<button data-act="move" data-to="${k === 'done' ? 'doing' : 'todo'}" data-id="${t.id}" class="hover:text-white">←</button>` : ''}
+            ${k !== 'done' ? `<button data-act="move" data-to="${k === 'todo' ? 'doing' : 'done'}" data-id="${t.id}" class="hover:text-white">→</button>` : ''}
+            <button data-act="del" data-id="${t.id}" class="hover:text-rose-400 opacity-60 group-hover:opacity-100">✕</button>
+          </div>
+        </li>`).join('')}</ul>
+    </div>`).join('');
+  $('board').querySelectorAll('button').forEach(b => b.onclick = async () => {
+    const id = +b.dataset.id;
+    if (b.dataset.act === 'move') await api(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: b.dataset.to }) });
+    if (b.dataset.act === 'del' && confirm('Slet opgaven?')) await api(`/api/tasks/${id}`, { method: 'DELETE' });
+    if (b.dataset.act === 'timer') await startTimer(state.current.id, id);
+    refresh();
+  });
+}
+async function loadLogs() {
+  const logs = await api(`/api/timelogs?project_id=${state.current.id}`);
+  $('logList').innerHTML = logs.map(l => `
+    <li class="flex items-center gap-3 px-3 py-2">
+      <span class="text-slate-400 w-32 shrink-0">${new Date(l.started_at).toLocaleString('da-DK', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+      <span class="flex-1 truncate">${esc(l.task_title || '—')}</span>
+      <span class="tick ${l.stopped_at ? '' : 'text-emerald-400'}">${fmtHM(l.seconds)}</span>
+      <button data-id="${l.id}" class="text-slate-500 hover:text-rose-400">✕</button>
+    </li>`).join('') || '<li class="px-3 py-2 text-slate-500">Ingen tid registreret endnu.</li>';
+  $('logList').querySelectorAll('button').forEach(b => b.onclick = async () => {
+    if (confirm('Slet tidsregistreringen?')) { await api(`/api/timelogs/${b.dataset.id}`, { method: 'DELETE' }); refresh(); }
+  });
+}
+
+// ---------- Timer ----------
+async function startTimer(projectId, taskId = null) {
+  const r = await api('/api/timers/start', { method: 'POST', body: JSON.stringify({ project_id: projectId, task_id: taskId }) });
+  state.active = r.active; state.skew = Date.now() - Date.parse(r.server_time); renderTimer();
+}
+async function stopTimer() { await api('/api/timers/stop', { method: 'POST' }); state.active = null; renderTimer(); refresh(); }
+function elapsed() { return state.active ? (Date.now() - state.skew - Date.parse(state.active.started_at)) / 1000 : 0; }
+function renderTimer() {
+  const a = state.active;
+  $('timerBar').innerHTML = a ? `
+    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+    <span class="text-slate-200 truncate">${esc(a.project_name)}${a.task_title ? ' · ' + esc(a.task_title) : ''}</span>
+    <span id="tick" class="tick font-mono text-emerald-400">${fmt(elapsed())}</span>
+    <button id="stopBtn" class="ml-auto md:ml-0 rounded-lg bg-rose-600 hover:bg-rose-500 px-3 py-1 text-white">■ Stop</button>`
+    : 'Ingen timer kører';
+  if (a) $('stopBtn').onclick = stopTimer;
+  const running = a && state.current && a.project_id === state.current.id;
+  $('pdTimer').textContent = running ? '■ Stop timer' : '▶ Start timer';
+  $('pdTimer').className = `rounded-lg px-3 py-1.5 text-sm ${running ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'}`;
+  document.title = a ? `${fmt(elapsed())} · ${a.project_name}` : 'Projektstyring';
+}
+setInterval(() => { if (state.active && $('tick')) { $('tick').textContent = fmt(elapsed()); document.title = `${fmt(elapsed())} · ${state.active.project_name}`; } }, 1000);
+
+// ---------- Formularer ----------
+$('projectForm').onsubmit = async e => {
+  e.preventDefault();
+  const p = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name: $('projectName').value, color: $('projectColor').value }) });
+  $('projectName').value = ''; await loadProjects(); selectProject(p.id);
+};
+$('taskForm').onsubmit = async e => {
+  e.preventDefault();
+  await api(`/api/projects/${state.current.id}/tasks`, { method: 'POST', body: JSON.stringify({ title: $('taskTitle').value, due_date: $('taskDue').value || null }) });
+  $('taskTitle').value = ''; $('taskDue').value = ''; refresh();
+};
+$('pdTimer').onclick = () => (state.active && state.active.project_id === state.current.id ? stopTimer() : startTimer(state.current.id).then(refresh));
+$('pdArchive').onclick = async () => {
+  if (!confirm(`Arkivér "${state.current.name}"?`)) return;
+  await api(`/api/projects/${state.current.id}`, { method: 'PATCH', body: JSON.stringify({ archived: true }) });
+  state.current = null; $('projectDetail').classList.add('hidden'); $('emptyState').classList.remove('hidden'); refresh();
+};
+
+async function refresh() {
+  await Promise.all([loadProjects(), loadStats(), loadActive()]);
+  if (state.current) await Promise.all([loadTasks(), loadLogs()]);
+}
+async function start() {
+  if (!state.token) return showAuth();
+  try { await api('/api/auth/me'); } catch { return showAuth(); }
+  $('auth').classList.add('hidden'); $('app').classList.remove('hidden');
+  await refresh();
+  if (!state.current && state.projects[0]) selectProject(state.projects[0].id);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state.token) refresh().catch(() => {}); });
+start();
+</script>
+</body>
+</html>
