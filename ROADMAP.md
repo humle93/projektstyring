@@ -21,7 +21,7 @@ Baseret på *Projektstyring Masterplan* (Google Drive → Projektstyring). Opdat
 | 2.1 | `git init`, README med beskrivelse og opsætningsguide | ✅ |
 | 2.2 | Første commit `Init` | ✅ |
 | 2.2 | Opret repo [`humle93/projektstyring`](https://github.com/humle93/projektstyring) (offentligt) | ✅ |
-| 2.2 | Koden pushet til `main` | ✅ 6 commits, 25 filer |
+| 2.2 | Koden pushet til `main` | ✅ 25 filer, fuld historik |
 | 2.3 | Branch-beskyttelse på `main` (kræv grøn CI) | ⬜ |
 
 ## Fase 3 — Projektstyrings-dashboard
