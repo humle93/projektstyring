@@ -1,0 +1,1 @@
+"""Projektstyring — FastAPI-backend."""

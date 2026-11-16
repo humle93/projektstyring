@@ -1,0 +1,4 @@
+fastapi>=0.110
+uvicorn>=0.27
+httpx>=0.27  # kun til tests
+pytest>=8    # kun til tests
