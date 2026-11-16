@@ -10,7 +10,7 @@ Samlet projektstyrings-setup: tidsregistrering, projekter og opgaver — på web
 | Android-app (Fase 3.3) | `android/` | SocialPilot — Kotlin + Jetpack Compose |
 | CI/CD | `.github/workflows/` | Auto-build af APK/AAB + backend-tests ved push til `main` |
 
-Status og næste skridt: se [ROADMAP.md](ROADMAP.md).
+Status og næste skridt: se [ROADMAP.md](ROADMAP.md). Arkitektur og API: se [docs/architecture.md](docs/architecture.md) og [docs/api-spec.md](docs/api-spec.md).
 
 ## 1. Drive-synkronisering
 
@@ -21,7 +21,7 @@ DRY_RUN=1 ./scripts/sync.sh push # se hvad der ville blive kopieret
 ./scripts/sync.sh bisync --resync   # første tovejs-sync, derefter uden --resync
 ```
 
-Stier sættes med `LOCAL_DIR` og `REMOTE`. Log: `~/.local/state/projektstyring/sync-<dato>.log`, seneste status i `last_status.json`. Scriptet venter og prøver igen med stigende pause ved afbrudt forbindelse og forhindrer dobbeltkørsel med en lås.
+Stier sættes med `LOCAL_DIR` og `REMOTE`. `pull` spejler Drive, så lokale filer der ikke findes på Drive fjernes — de gemmes dog i `~/.local/state/projektstyring/local-trash/<tid>` og kan gendannes. Log: `~/.local/state/projektstyring/sync-<dato>.log`, seneste status i `last_status.json`. Scriptet venter og prøver igen med stigende pause ved afbrudt forbindelse og forhindrer dobbeltkørsel med en lås.
 
 Automatisk hver time (cron / Termux `crond`):
 ```

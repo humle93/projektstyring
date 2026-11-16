@@ -53,8 +53,9 @@ wait_for_network() {
 run_with_retry() {  # $@ = rclone-kommando
   local i=1
   while (( i <= MAX_RETRIES )); do
-    if rclone "$@" "${COMMON[@]}"; then return 0; fi
+    rclone "$@" "${COMMON[@]}"
     local code=$?
+    if (( code == 0 )); then return 0; fi
     log WARN "rclone fejlede (exit $code, forsøg $i/$MAX_RETRIES)"
     wait_for_network || return "$code"
     i=$((i+1))
@@ -72,7 +73,8 @@ case "$MODE" in
   push)   wait_for_network || { write_status fail push "ingen forbindelse"; exit 1; }
           run_with_retry sync "$LOCAL_DIR" "$REMOTE" --backup-dir "${REMOTE}_backup/$(date +%F_%H%M)" "$@" ;;
   pull)   wait_for_network || { write_status fail pull "ingen forbindelse"; exit 1; }
-          run_with_retry sync "$REMOTE" "$LOCAL_DIR" "$@" ;;
+          # --backup-dir: lokalt slettede/overskrevne filer kan gendannes
+          run_with_retry sync "$REMOTE" "$LOCAL_DIR" --backup-dir "$LOG_DIR/local-trash/$(date +%F_%H%M)" "$@" ;;
   bisync) wait_for_network || { write_status fail bisync "ingen forbindelse"; exit 1; }
           run_with_retry bisync "$LOCAL_DIR" "$REMOTE" --check-access=false --resilient --recover "$@" ;;
   *) echo "Ukendt mode: $MODE (brug check|push|pull|bisync)"; exit 2 ;;
